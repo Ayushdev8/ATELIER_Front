@@ -14,9 +14,9 @@ export default function ProductCard({ product }) {
   const { isInWishlist, toggleWishlist } = useWishlist();
 
   if (!product) return null;
-
-  const isDiscounted = hasValidDiscount(product.price, product.discountPercentage);
-  const finalPrice = calculateDiscountedPrice(product.price, product.discountPercentage);
+    const discount = (product.baseMrp - product.basePrice)*100/product.baseMrp;
+  // const isDiscounted = hasValidDiscount(product.baseMrp, product.basePrice);
+  // const finalPrice = calculateDiscountedPrice(product.baseMrp, product.basePrice);
   const inWishlist = isInWishlist(product.id);
 
   const handleQuickAdd = (e) => {
@@ -31,16 +31,15 @@ export default function ProductCard({ product }) {
     toggleWishlist(product);
   };
 
-  const mainImage = product.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=800&auto=format&fit=crop';
-  const secondaryImage = product.images?.[1] || mainImage;
+  const mainImages = product.image.imageUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=800&auto=format&fit=crop';
 
   return (
     <div className="group relative bg-white rounded-2xl border border-stone-200/70 shadow-soft-sm hover:shadow-soft transition-all duration-300 flex flex-col overflow-hidden">
       {/* Product Image Container */}
       <div className="relative aspect-square w-full bg-stone-100 overflow-hidden">
-        <Link href={`/products/${product.id}`} className="block w-full h-full">
+        <Link href={`/products/${product.slug}`} className="block w-full h-full">
           <img
-            src={mainImage}
+            src={mainImages}
             alt={product.name}
             className="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
             loading="lazy"
@@ -48,36 +47,43 @@ export default function ProductCard({ product }) {
         </Link>
 
         {/* Top-Left: Discount Badge */}
-        {isDiscounted && (
+         
           <div className="absolute top-3 left-3 z-10">
-            <DiscountBadge discountPercentage={product.discountPercentage} size="sm" />
+            <DiscountBadge discountPercentage={discount} size="sm" />
           </div>
-        )}
+        
 
         {/* Top-Right: Status Tags and Wishlist Toggle */}
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
-          {product.isNew && (
-            <span className="bg-stone-900/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              New
-            </span>
-          )}
-          {product.isBestSeller && !product.isNew && (
-            <span className="bg-amber-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              Popular
-            </span>
-          )}
-          <button
-            onClick={handleWishlistToggle}
-            className={`p-2 rounded-full backdrop-blur-md shadow-sm transition-all duration-200 ${
-              inWishlist
-                ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
-                : 'bg-white/90 text-stone-600 hover:text-stone-900 hover:bg-white'
-            }`}
-            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-          >
-            <Heart className={`w-4 h-4 ${inWishlist ? 'fill-current' : ''}`} />
-          </button>
-        </div>
+        
+        {/* Top-Right: Wishlist Toggle */}
+            <div className="absolute top-3 right-3 z-10">
+              <button
+                onClick={handleWishlistToggle}
+                className={`p-2 rounded-full backdrop-blur-md shadow-sm transition-all duration-200 ${
+                  inWishlist
+                    ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                    : 'bg-white/90 text-stone-600 hover:text-stone-900 hover:bg-white'
+                }`}
+                aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+              >
+                <Heart className={`w-4 h-4 ${inWishlist ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            {/* Bottom-Right: Status Tags */}
+            <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end gap-1.5">
+              {product.new && (
+                <span className="bg-stone-900/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                  New
+                </span>
+              )}
+
+              {product.bestSeller && (
+                <span className="bg-amber-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                  Popular
+                </span>
+              )}
+            </div>
 
         {/* Quick Add Overlay on hover */}
         <div className="absolute inset-x-3 bottom-3 z-10 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 hidden sm:block">
@@ -95,7 +101,7 @@ export default function ProductCard({ product }) {
       <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-1">
-            <span>{product.category}</span>
+            <span>{product.brand.name}</span>
             {product.rating && (
               <span className="flex items-center gap-1 text-stone-700">
                 <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -116,13 +122,13 @@ export default function ProductCard({ product }) {
         <div className="pt-2 border-t border-stone-100 flex items-center justify-between mt-auto">
           <div className="flex items-baseline gap-2">
             <span className="text-base sm:text-lg font-bold text-stone-900 font-sans">
-              {formatCurrency(finalPrice)}
+              {formatCurrency(product.basePrice)}
             </span>
-            {isDiscounted && (
+             
               <span className="text-xs text-stone-400 line-through">
-                {formatCurrency(product.price)}
+                {formatCurrency(product.baseMrp)}
               </span>
-            )}
+            
           </div>
 
           {/* Mobile direct Add button */}

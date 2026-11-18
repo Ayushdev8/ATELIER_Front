@@ -26,14 +26,17 @@ import {
   Info,
   Lock,
 } from 'lucide-react';
+import api from '@/service/api';
+import AddressSection from '@/components/checkout/AddressSection';
+
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { addOrder } = useStore();
   const { notify } = useNotification();
   const {
-    items,
+    cartItems,
     totalItems,
     originalSubtotal,
     discountedSubtotal,
@@ -61,9 +64,13 @@ export default function CheckoutPage() {
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [completedOrder, setCompletedOrder] = useState(null);
 
-  if (items.length === 0 && !completedOrder) {
+  const [completedOrder, setCompletedOrder] = useState(null);
+  const [addressId, setAddressId] = useState(null);
+
+  
+
+  if (cartItems.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20">
         <EmptyState
@@ -102,141 +109,74 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async (e) => {
-    e.preventDefault();
+         e.preventDefault();
 
-    if (!validateForm()) {
-      notify.error('Please resolve the highlighted validation errors.');
-      return;
-    }
+        if (!addressId) {
+            notify("Please select a delivery address", "error");
+          return;
+        }
 
-    setIsSubmitting(true);
-    notify.loading('Simulating order authorization and fulfillment...', { duration: 1500 });
+        try {
+            setIsSubmitting(true);
 
-    // FUTURE BACKEND INTEGRATION:
-    // Replace this local demo order creation with your real order endpoint:
-    // const response = await fetch('/api/orders', { method: 'POST', body: JSON.stringify(...) });
-    setTimeout(() => {
-      const demoOrderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
+            // STEP 1: Create local order in Spring Boot
+            const res = await api.post("/order/create", {
+                "addressId": addressId,
+             });
 
-      const newOrder = {
-        id: demoOrderId,
-        date: new Date().toISOString().split('T')[0],
-        customer: {
-          name: `${formData.firstName} ${formData.lastName}`.trim(),
-          email: formData.email,
-          phone: formData.phone,
-          address: `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}, ${formData.country}`,
-        },
-        items: items.map((i) => ({
-          id: i.id,
-          name: i.name,
-          price: i.effectivePrice,
-          originalPrice: i.originalPrice,
-          quantity: i.quantity,
-          size: i.size,
-          color: i.color,
-          image: i.image,
-        })),
-        subtotal: discountedSubtotal,
-        discountTotal: discountSavings,
-        shipping: shippingFee,
-        total: finalTotal,
-        paymentMethod:
-          formData.paymentMethod === 'apple-pay'
-            ? 'Apple Pay (Demo)'
-            : formData.paymentMethod === 'paypal'
-            ? 'PayPal (Demo)'
-            : 'Credit Card (Demo)',
-        paymentStatus: 'Paid',
-        status: 'Processing',
-      };
+            console.log(res.data);
 
-      // Add to shared store state (and localStorage)
-      addOrder(newOrder);
+            const order = res.data;
 
-      // Clear the cart only after simulated order succeeds
-      clearCart();
+            console.log("Created order:", order);
 
-      setIsSubmitting(false);
-      setCompletedOrder(newOrder);
-      notify.success(`Demo Order #${demoOrderId} placed successfully!`);
-    }, 1200);
-  };
+            // STEP 2: Initiate Cashfree payment
+            const paymentResponse = await api.post(
+                `/payment/cashfree/checkout/${order.orderId}`
+            );
+            console.log("Cashfree session response:", paymentResponse.data);
 
-  // SUCCESS PANEL / CONFIRMATION VIEW
-  if (completedOrder) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-stone-200/80 shadow-soft-lg text-center animate-slide-down">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="w-9 h-9" />
-          </div>
+            const paymentSessionId =
+                paymentResponse.data.paymentSessionId;
 
-          <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full">
-            Demo Order Confirmed
-          </span>
 
-          <h1 className="font-serif text-3xl sm:text-4xl font-extrabold text-stone-950 mt-4 mb-2">
-            Thank you for your demo order!
-          </h1>
-          <p className="text-stone-500 text-sm max-w-md mx-auto mb-8 font-light leading-relaxed">
-            Order Reference: <strong className="text-stone-900 font-mono">{completedOrder.id}</strong>. A confirmation summary has been registered in your demo profile.
-          </p>
+            if (typeof window.Cashfree !== "function") {
+            throw new Error("Cashfree SDK is not loaded");
+            }
 
-          <Alert type="info" className="text-left mb-8">
-            <p className="font-semibold mb-1">Frontend Demo Notice:</p>
-            This was a simulated checkout. No real payment was charged, and no real delivery is dispatched. Your demo order is now visible in both the <strong>Customer Account</strong> and <strong>Admin Dashboard</strong>.
-          </Alert>
+            // STEP 3: Open Cashfree checkout
+            const cashfree = window.Cashfree({
+                mode: "sandbox",
+            });
 
-          {/* Order Details Brief */}
-          <div className="bg-[#FAF8F5] rounded-2xl p-6 text-left border border-stone-200/60 mb-8 space-y-3 text-xs">
-            <div className="flex justify-between pb-3 border-b border-stone-200/60">
-              <span className="text-stone-500">Recipient:</span>
-              <span className="font-bold text-stone-900">{completedOrder.customer.name}</span>
-            </div>
-            <div className="flex justify-between pb-3 border-b border-stone-200/60">
-              <span className="text-stone-500">Shipping Address:</span>
-              <span className="font-medium text-stone-900 text-right max-w-xs">{completedOrder.customer.address}</span>
-            </div>
-            <div className="flex justify-between pb-3 border-b border-stone-200/60">
-              <span className="text-stone-500">Payment:</span>
-              <span className="font-medium text-stone-900">{completedOrder.paymentMethod}</span>
-            </div>
-            <div className="flex justify-between pt-1 text-sm font-bold">
-              <span className="text-stone-900 font-serif">Total Paid:</span>
-              <span className="text-stone-950 font-sans">{formatCurrency(completedOrder.total)}</span>
-            </div>
-          </div>
+            await cashfree.checkout({
+                paymentSessionId,
+                redirectTarget: "_self",
+            });
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/account" className="w-full sm:w-auto">
-              <Button variant="primary" size="lg" className="w-full">
-                <span>View Order in Account</span>
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            <Link href="/products" className="w-full sm:w-auto">
-              <Button variant="outline" size="lg" className="w-full">
-                <span>Continue Shopping</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+        } catch (error) {
+
+            console.error( "Checkout error:",error.response?.data || error.message);
+
+           notify(error.response?.data?.message );
+         } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+  
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       <div className="mb-8">
         <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-brand-700">
-          Secure Demo Checkout
+          Secure Checkout
         </span>
         <h1 className="font-serif text-3xl sm:text-4xl font-extrabold text-stone-950 mt-1">
           Finalize Your Order
         </h1>
         <p className="text-stone-500 text-xs sm:text-sm mt-1">
-          Complete the simulated checkout form below. No payment card details are stored or charged.
+          Complete the checkout form below. No payment card details are stored or charged.
         </p>
       </div>
 
@@ -287,79 +227,20 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* 2. Shipping Address */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/80 shadow-soft-sm">
-            <h3 className="font-serif text-lg font-bold text-stone-900 mb-6 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-stone-900 text-white text-xs flex items-center justify-center font-sans">
-                2
-              </span>
-              <span>Delivery Address</span>
-            </h3>
+          {/* 2. Delivery Address */}
+        <div className="lg:col-span-7">
+            <AddressSection
+            onAddressSelect={setAddressId}
+          />
+        </div>
 
-            <div className="space-y-4">
-              <Input
-                label="Street Address"
-                value={formData.street}
-                onChange={(e) => handleInputChange('street', e.target.value)}
-                error={errors.street}
-                placeholder="450 Lexington Ave, Apt 14B"
-                required
-              />
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <Input
-                  label="City"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  error={errors.city}
-                  required
-                />
-                <Input
-                  label="State / Province"
-                  value={formData.state}
-                  onChange={(e) => handleInputChange('state', e.target.value)}
-                  error={errors.state}
-                  required
-                />
-                <div className="col-span-2 sm:col-span-1">
-                  <Input
-                    label="ZIP / Postal Code"
-                    value={formData.zip}
-                    onChange={(e) => handleInputChange('zip', e.target.value)}
-                    error={errors.zip}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
-                  Country
-                </label>
-                <select
-                  value={formData.country}
-                  onChange={(e) => handleInputChange('country', e.target.value)}
-                  className="block w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-700"
-                >
-                  <option value="United States">United States</option>
-                  <option value="United Kingdom">United Kingdom</option>
-                  <option value="Canada">Canada</option>
-                  <option value="Germany">Germany</option>
-                  <option value="France">France</option>
-                  <option value="Australia">Australia</option>
-                  <option value="India">India</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Demo Payment Method */}
+          {/* 3. Payment Method */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/80 shadow-soft-sm">
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-4 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-stone-900 text-white text-xs flex items-center justify-center font-sans">
                 3
               </span>
-              <span>Demo Payment Simulation</span>
+              <span> Payment Simulation</span>
             </h3>
 
             <p className="text-xs text-stone-500 mb-6">
@@ -464,17 +345,17 @@ export default function CheckoutPage() {
 
             {/* List preview of items in checkout */}
             <div className="py-4 space-y-3 max-h-60 overflow-y-auto divide-y divide-stone-100">
-              {items.map((item) => (
-                <div key={item.cartItemId} className="flex items-center justify-between gap-3 pt-2 first:pt-0">
+              {cartItems.items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 pt-2 first:pt-0">
                   <div className="flex items-center gap-3">
-                    <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover bg-stone-100" />
+                    <img src={item.imageUrl} alt={item.productName} className="w-10 h-10 rounded-lg object-cover bg-stone-100" />
                     <div>
-                      <p className="text-xs font-semibold text-stone-900 line-clamp-1">{item.name}</p>
+                      <p className="text-xs font-semibold text-stone-900 line-clamp-1">{item.productName}</p>
                       <p className="text-[10px] text-stone-400">Qty: {item.quantity}</p>
                     </div>
                   </div>
                   <span className="text-xs font-bold text-stone-900 font-sans">
-                    {formatCurrency(item.effectivePrice * item.quantity)}
+                    {formatCurrency(discountedSubtotal)}
                   </span>
                 </div>
               ))}
@@ -509,10 +390,14 @@ export default function CheckoutPage() {
                 variant="primary"
                 size="lg"
                 isLoading={isSubmitting}
+                disabled={isSubmitting}
                 className="w-full shadow-lg"
               >
                 <Lock className="w-4 h-4 mr-2" />
-                <span>Place Demo Order • {formatCurrency(finalTotal)}</span>
+                {isSubmitting
+                    ? "Processing..."
+                    : `Place Order • ${formatCurrency(finalTotal)}`}
+                
               </Button>
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-stone-400 mt-4 text-center">

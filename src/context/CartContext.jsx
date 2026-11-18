@@ -7,155 +7,134 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { getStorageItem, setStorageItem } from '@/utils/storage';
 import { calculateDiscountedPrice } from '@/utils/calculateDiscount';
 import { useNotification } from '@/hooks/useNotification';
+import api from '@/service/api';
 
 const CartContext = createContext(null);
-const CART_STORAGE_KEY = 'atelier_cart_items';
+// const CART_STORAGE_KEY = 'atelier_cart_items';
 const FREE_SHIPPING_THRESHOLD = 150;
 const STANDARD_SHIPPING_FEE = 15;
 
 export function CartProvider({ children }) {
-  const [items, setItems] = useState([]);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [cartItems, setCartItems] = useState({
+    cartId:null,
+    items: [],
+    totalItems: 0,
+    totalAmount: 0,
+  });
+  const[cartLoading,setCartLoading] = useState(false);
   const { notify } = useNotification();
 
   // Load from localStorage only after mount to prevent hydration mismatch
-  useEffect(() => {
-    const saved = getStorageItem(CART_STORAGE_KEY, []);
-    setItems(Array.isArray(saved) ? saved : []);
-    setIsInitialized(true);
-  }, []);
+  // useEffect(() => {
+  //   const saved = getStorageItem(CART_STORAGE_KEY, []);
+  //   setItems(Array.isArray(saved) ? saved : []);
+  //   setIsInitialized(true);
+  // }, []);
 
-  // Save to localStorage whenever cart changes, after initialization
-  useEffect(() => {
-    if (isInitialized) {
-      setStorageItem(CART_STORAGE_KEY, items);
+  // // Save to localStorage whenever cart changes, after initialization
+  // useEffect(() => {
+  //   if (isInitialized) {
+  //     setStorageItem(CART_STORAGE_KEY, items);
+  //   }
+  // }, [items, isInitialized]);
+
+  const getAllCartItems = async()=>{
+    setCartLoading(true);
+    try{
+      const res = await api.get("/cart/getItems")
+      console.log(res.data);
+      setCartItems(res.data);
+    }catch(err){
+      console.log(err.response?.data?.message || err.response?.data || err.message);
+    }finally{
+      setCartLoading(false);
     }
-  }, [items, isInitialized]);
 
-  // Add to Cart
-  const addToCart = useCallback((product, quantity = 1, selectedSize = null, selectedColor = null) => {
-    if (!product || !product.id) return;
+  }
+  useEffect(()=>{
+      getAllCartItems();
+  },[])
 
-    setItems((prevItems) => {
-      const itemKey = `${product.id}-${selectedSize || 'default'}-${selectedColor || 'default'}`;
-      const existingIndex = prevItems.findIndex((i) => i.cartItemId === itemKey);
-
-      const effectivePrice = calculateDiscountedPrice(product.price, product.discountPercentage);
-      const originalPrice = product.price;
-      const maxStock = product.stock || 99;
-
-      if (existingIndex > -1) {
-        const existingItem = prevItems[existingIndex];
-        const newQuantity = existingItem.quantity + quantity;
-
-        if (newQuantity > maxStock) {
-          notify.warning(`Maximum stock reached (${maxStock} available)`);
-          return prevItems;
-        }
-
-        const updated = [...prevItems];
-        updated[existingIndex] = {
-          ...existingItem,
-          quantity: newQuantity,
-        };
-        notify.success(`Updated "${product.name}" quantity to ${newQuantity}`);
-        return updated;
-      } else {
-        if (quantity > maxStock) {
-          notify.warning(`Only ${maxStock} items available in stock`);
-          return prevItems;
-        }
-
-        const newItem = {
-          cartItemId: itemKey,
-          id: product.id,
-          name: product.name,
-          category: product.category,
-          originalPrice,
-          effectivePrice,
-          discountPercentage: product.discountPercentage || 0,
-          image: product.images?.[0] || '',
-          stock: maxStock,
-          size: selectedSize || product.sizes?.[0] || null,
-          color: selectedColor || product.colors?.[0] || null,
-          quantity,
-        };
-
-        notify.success(`Added "${product.name}" to cart`);
-        return [...prevItems, newItem];
-      }
-    });
-  }, [notify]);
+  const addToCart = async (selectedVariant,quantity)=>{
+     try{
+      const res = await api.post("/cart/addToCart",{
+        "variantId":selectedVariant.id,
+        "quantity":quantity
+      })
+      console.log(res.data);
+      getAllCartItems();
+      notify.success("item added in your cart");
+     }catch(err){
+      console.log(err.response?.data?.message || err.response?.data || err.message);
+      notify.error(err.response?.data?.message || err.response?.data || err.message)
+     }
+  }
 
   // Update quantity
-  const updateQuantity = useCallback((cartItemId, newQuantity) => {
-    if (newQuantity <= 0) {
-      removeFromCart(cartItemId);
-      return;
+  const updateQuantity = async (variantId,newQuantity)=>{
+    try{
+      const res = await api.patch(`/cart/updateItem/${variantId}`,
+      newQuantity
+    )
+     console.log(res.data);
+     getAllCartItems();
+     notify.success(res.data);
+    }catch(err){
+      console.log(err.response?.data?.message || err.response?.data || err.message);
+      notify.error(err.response?.data?.message || err.response?.data || err.message);
     }
+  }
 
-    setItems((prevItems) => {
-      return prevItems.map((item) => {
-        if (item.cartItemId === cartItemId) {
-          if (newQuantity > item.stock) {
-            notify.warning(`Sorry, only ${item.stock} units available.`);
-            return { ...item, quantity: item.stock };
-          }
-          return { ...item, quantity: newQuantity };
-        }
-        return item;
-      });
-    });
-  }, [notify]);
+    
+  
 
   // Remove from cart
-  const removeFromCart = useCallback((cartItemId) => {
-    setItems((prevItems) => {
-      const itemToRemove = prevItems.find((i) => i.cartItemId === cartItemId);
-      if (itemToRemove) {
-        notify.info(`Removed "${itemToRemove.name}" from cart`);
-      }
-      return prevItems.filter((i) => i.cartItemId !== cartItemId);
-    });
-  }, [notify]);
+  const removeFromCart = async (variantId)=>{
+    try{
+      const res = await api.delete(`/cart/deleteItem/${variantId}`)
+      console.log(res.data);
+      getAllCartItems();
+      notify.info(res.data);
+    }catch(err){
+      console.log(err.response?.data?.message || err.response?.data || err.message);
+      notify.error(err.response?.data?.message || err.response?.data || err.message);
 
-  // Clear cart
+    }
+    
+  }
+
+  // // Clear cart
   const clearCart = useCallback(() => {
-    setItems([]);
-    setStorageItem(CART_STORAGE_KEY, []);
+    
   }, []);
 
   // Totals calculations
   const { totalItems, originalSubtotal, discountedSubtotal, discountSavings, shippingFee, finalTotal } = useMemo(() => {
-    let count = 0;
+    
     let origSub = 0;
-    let discSub = 0;
 
-    items.forEach((item) => {
-      count += item.quantity;
-      origSub += item.originalPrice * item.quantity;
-      discSub += item.effectivePrice * item.quantity;
+    cartItems.items.forEach((item) => {
+      origSub += item.baseMrp * item.quantity;
     });
-
-    const savings = Math.max(0, origSub - discSub);
-    const shipping = discSub >= FREE_SHIPPING_THRESHOLD || discSub === 0 ? 0 : STANDARD_SHIPPING_FEE;
-    const total = discSub + shipping;
+    const subtotal = cartItems.totalAmount;
+    const savings = Math.max(0, origSub - subtotal );
+    const shipping =  subtotal >= FREE_SHIPPING_THRESHOLD || subtotal === 0 ? 0 : STANDARD_SHIPPING_FEE;
+    const total = subtotal + shipping;
 
     return {
-      totalItems: count,
+      totalItems: cartItems.totalItems,
       originalSubtotal: Math.round(origSub),
-      discountedSubtotal: Math.round(discSub),
+      discountedSubtotal: Math.round(subtotal),
       discountSavings: Math.round(savings),
       shippingFee: shipping,
       finalTotal: Math.round(total),
     };
-  }, [items]);
+  }, [cartItems]);
 
   return (
     <CartContext.Provider
       value={{
-        items,
-        isInitialized,
+        cartItems,
         totalItems,
         originalSubtotal,
         discountedSubtotal,
@@ -167,6 +146,8 @@ export function CartProvider({ children }) {
         updateQuantity,
         removeFromCart,
         clearCart,
+        cartLoading,
+        getAllCartItems,
       }}
     >
       {children}

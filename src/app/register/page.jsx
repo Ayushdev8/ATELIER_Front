@@ -12,18 +12,15 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { Eye, EyeOff, Lock, User, Mail, Phone, ArrowRight } from 'lucide-react';
+import api from '@/service/api';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register } = useAuth();
   const { notify } = useNotification();
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
     username: '',
     email: '',
-    phone: '',
     password: '',
     confirmPassword: '',
   });
@@ -36,17 +33,14 @@ export default function RegisterPage() {
 
   const validate = () => {
     const errs = {};
-    if (!formData.firstName.trim()) errs.firstName = 'First name is required';
-    if (!formData.lastName.trim()) errs.lastName = 'Last name is required';
     if (!formData.username.trim()) errs.username = 'Username is required';
     if (!formData.email.trim() || !formData.email.includes('@')) {
       errs.email = 'Valid email is required';
     }
-    if (!formData.phone.trim()) errs.phone = 'Phone number is required';
     if (!formData.password) {
       errs.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      errs.password = 'Password must be at least 6 characters';
+    } else if (formData.password.length < 4) {
+      errs.password = 'Password must be at least 4 characters';
     }
     if (formData.password !== formData.confirmPassword) {
       errs.confirmPassword = 'Passwords do not match';
@@ -64,8 +58,14 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      await register(formData);
-      router.push('/account');
+     const res = await api.post("/auth/register",{
+      "username":formData.username,
+      "email":formData.email,
+      "password":formData.password
+     });
+     console.log(res.data);
+     notify.success(`successfully registered,${res.data.username}`);
+      // router.push('/account');
     } catch (err) {
       setErrorMessage(err.message || 'Registration failed');
     } finally {
@@ -92,32 +92,8 @@ export default function RegisterPage() {
         {errorMessage && <Alert type="error" className="mb-6">{errorMessage}</Alert>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="First Name"
-              value={formData.firstName}
-              onChange={(e) => {
-                setFormData({ ...formData, firstName: e.target.value });
-                setErrors({ ...errors, firstName: '' });
-              }}
-              error={errors.firstName}
-              placeholder="Julian"
-              required
-            />
-            <Input
-              label="Last Name"
-              value={formData.lastName}
-              onChange={(e) => {
-                setFormData({ ...formData, lastName: e.target.value });
-                setErrors({ ...errors, lastName: '' });
-              }}
-              error={errors.lastName}
-              placeholder="Sterling"
-              required
-            />
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
             <Input
               label="Username"
               icon={User}
@@ -127,22 +103,10 @@ export default function RegisterPage() {
                 setErrors({ ...errors, username: '' });
               }}
               error={errors.username}
-              placeholder="julian_sterling"
+              placeholder="john123"
               required
             />
-            <Input
-              label="Phone Number"
-              icon={Phone}
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => {
-                setFormData({ ...formData, phone: e.target.value });
-                setErrors({ ...errors, phone: '' });
-              }}
-              error={errors.phone}
-              placeholder="+1 (555) 000-0000"
-              required
-            />
+            
           </div>
 
           <Input
@@ -217,7 +181,7 @@ export default function RegisterPage() {
               isLoading={isLoading}
               className="w-full shadow-md"
             >
-              <span>Create Demo Account</span>
+              <span>Create Account</span>
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>

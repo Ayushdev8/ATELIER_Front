@@ -5,7 +5,7 @@
  * @param {string} symbol - Currency symbol, defaults to '$'
  * @returns {string} - Formatted currency string, e.g. '$2,499'
  */
-export function formatCurrency(amount, symbol = '$') {
+export function formatCurrency(amount, symbol = '₹') {
   if (amount === undefined || amount === null || isNaN(Number(amount))) {
     return `${symbol}0`;
   }

@@ -10,6 +10,7 @@ import { initialCustomers } from '@/data/customers';
 import { dashboardOverview } from '@/data/dashboard';
 import { getStorageItem, setStorageItem } from '@/utils/storage';
 import { useNotification } from '@/hooks/useNotification';
+import api from '@/service/api';
 
 const StoreContext = createContext(null);
 
@@ -19,7 +20,6 @@ const CUSTOMERS_STORAGE_KEY = 'atelier_store_customers';
 const SETTINGS_STORAGE_KEY = 'atelier_store_settings';
 
 export function StoreProvider({ children }) {
-  const [products, setProducts] = useState(initialProducts);
   const [orders, setOrders] = useState(initialOrders);
   const [customers, setCustomers] = useState(initialCustomers);
   const [settings, setSettings] = useState(dashboardOverview.storeSettings);
@@ -40,32 +40,62 @@ export function StoreProvider({ children }) {
 
     setIsLoaded(true);
   }, []);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [pagination, setPagination] = useState({
+    pageNumber: 0,
+    pageSize: 12,
+    totalPages: 1,
+    totalElements: 0,
+    last: true,
+    first: true,
+  });
 
-  // Product CRUD
-  const addProduct = useCallback(
-    (newProduct) => {
-      // FUTURE BACKEND INTEGRATION:
-      // Replace with POST /api/products
-      setProducts((prev) => {
-        const productWithId = {
-          ...newProduct,
-          id: Date.now(),
-          slug: newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          rating: 5.0,
-          reviewCount: 1,
-          isNew: true,
-          images: newProduct.images?.length ? newProduct.images : [
-            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=1000&auto=format&fit=crop'
-          ],
-        };
-        const updated = [productWithId, ...prev];
-        setStorageItem(PRODUCTS_STORAGE_KEY, updated);
-        notify.success(`Product "${productWithId.name}" created successfully`);
-        return updated;
+  const getProduct = async (page = 0, size = 12) => {
+    setLoading(true);
+    try {
+      const res = await api.get("/public/products", {
+        params: {
+          pageNumber: page,
+          pageSize: size,
+          page: page,
+          size: size,
+        },
       });
-    },
-    [notify]
-  );
+      console.log(res.data);
+      const data = res.data;
+      const productList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.content)
+          ? data.content
+          : Array.isArray(data.data)
+            ? data.data
+            : [];
+      setProducts(productList);
+
+      // Preserve pagination metadata if returned by API
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        setPagination({
+          pageNumber: data.number ?? data.pageNumber ?? data.page ?? page,
+          pageSize: data.size ?? data.pageSize ?? size,
+          totalPages: data.totalPages ?? (data.totalElements ? Math.ceil(data.totalElements / (data.size || data.pageSize || size)) : 1),
+          totalElements: data.totalElements ?? data.total ?? productList.length,
+          last: data.last ?? data.lastPage ?? true,
+          first: data.first ?? data.firstPage ?? (page === 0),
+        });
+      }
+    } catch (err) {
+      console.log(err.response?.data?.message || err.response?.data || err.message);
+      setError("Unable to load products. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    getProduct();
+  }, []);
 
   const updateProduct = useCallback(
     (id, updatedFields) => {
@@ -153,11 +183,17 @@ export function StoreProvider({ children }) {
     <StoreContext.Provider
       value={{
         products,
+        pagination,
+        loading,
+        setLoading,
+        error,
+        setError,
+        getProduct,
         orders,
         customers,
         settings,
         isLoaded,
-        addProduct,
+        
         updateProduct,
         deleteProduct,
         addOrder,

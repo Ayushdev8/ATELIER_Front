@@ -12,16 +12,19 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { Eye, EyeOff, Lock, User, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import api from '@/service/api';
+import useCart from '@/hooks/useCart';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { user,setUser,setIsAuthenticated } = useAuth();
   const { notify } = useNotification();
+  const { getAllCartItems } = useCart();
 
   const [formData, setFormData] = useState({
-    emailOrUsername: 'julian.sterling@example.com',
-    password: 'password123',
-  });
+    email: '',
+    password: '',
+});
 
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
@@ -30,13 +33,13 @@ export default function LoginPage() {
 
   const validate = () => {
     const errs = {};
-    if (!formData.emailOrUsername.trim()) {
+    if (!formData.email.trim()) {
       errs.emailOrUsername = 'Please enter your email or username';
     }
     if (!formData.password) {
       errs.password = 'Please enter your password';
-    } else if (formData.password.length < 6) {
-      errs.password = 'Password must be at least 6 characters';
+    } else if (formData.password.length < 4) {
+      errs.password = 'Password must be at least 4 characters';
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -50,22 +53,36 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await login(formData.emailOrUsername, formData.password);
-      router.push('/account');
+      const res = await api.post("/auth/user/login",{
+        email:formData.email,
+        password:formData.password
+      })
+      console.log(res.data);
+      localStorage.setItem("access",res.data.accessToken);
+      localStorage.setItem("refresh",res.data.refreshToken);
+      setUser(res.data.user);
+      setIsAuthenticated(true);
+      getAllCartItems();
+      notify.success(`welcome back,${res.data.user.username}`);
+
+      
+      // router.push('/account');
     } catch (err) {
-      setAuthError(err.message || 'Invalid credentials');
+      setAuthError(err.response?.data?.message ||err.response?.data ||err.message ||
+      'Invalid credentials'
+    );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFillDemo = () => {
-    setFormData({
-      emailOrUsername: 'julian.sterling@example.com',
-      password: 'password123',
-    });
-    setErrors({});
-  };
+  // const handleFillDemo = () => {
+  //   setFormData({
+  //     emailOrUsername: 'julian.sterling@example.com',
+  //     password: 'password123',
+  //   });
+  //   setErrors({});
+  // };
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -84,7 +101,7 @@ export default function LoginPage() {
         </div>
 
         {/* Demo Credentials Helper Card */}
-        <div className="mb-6 p-3.5 rounded-2xl bg-[#FAF8F5] border border-brand-200/60 flex items-center justify-between text-xs text-stone-700">
+        {/* <div className="mb-6 p-3.5 rounded-2xl bg-[#FAF8F5] border border-brand-200/60 flex items-center justify-between text-xs text-stone-700">
           <div>
             <p className="font-semibold text-brand-900 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-brand-600" />
@@ -99,24 +116,30 @@ export default function LoginPage() {
           >
             Auto-fill
           </button>
-        </div>
+        </div> */}
 
         {authError && <Alert type="error" className="mb-6">{authError}</Alert>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Email or Username"
-            type="text"
-            icon={User}
-            value={formData.emailOrUsername}
-            onChange={(e) => {
-              setFormData({ ...formData, emailOrUsername: e.target.value });
-              setErrors({ ...errors, emailOrUsername: '' });
-            }}
-            error={errors.emailOrUsername}
-            placeholder="Enter your email or username"
-            required
-          />
+              label="Email"
+              type="email"
+              icon={User}
+              value={formData.email}
+              onChange={(e) => {setFormData({
+                  ...formData,
+                  email: e.target.value,
+                });
+
+                setErrors({
+                  ...errors,
+                  email: '',
+                });
+              }}
+              error={errors.email}
+              placeholder="Enter your email"
+              required
+            />
 
           <div>
             <Input

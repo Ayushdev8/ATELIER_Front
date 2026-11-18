@@ -8,7 +8,7 @@ import { Trash2, AlertCircle } from 'lucide-react';
 export default function CartItem({ item, onUpdateQuantity, onRemove }) {
   if (!item) return null;
 
-  const isDiscounted = item.discountPercentage > 0;
+  const isDiscounted = (item.baseMrp - item.unitPrice) > 0;
   const isAtMaxStock = item.quantity >= item.stock;
 
   return (
@@ -16,19 +16,19 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
       {/* Product Image & Details */}
       <div className="flex items-center gap-4 flex-1">
         <Link
-          href={`/products/${item.id}`}
+          href={`/products/${item.slug}`}
           className="relative aspect-square w-20 sm:w-24 rounded-2xl overflow-hidden bg-stone-100 border border-stone-200 shrink-0"
         >
-          <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+          <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
         </Link>
 
         <div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700">
             {item.category}
           </span>
-          <Link href={`/products/${item.id}`} className="hover:text-brand-700 transition-colors">
+          <Link href={`/products/${item.slug}`} className="hover:text-brand-700 transition-colors">
             <h3 className="font-serif text-sm sm:text-base font-bold text-stone-900">
-              {item.name}
+              {item.productName}
             </h3>
           </Link>
 
@@ -41,11 +41,11 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
           {/* Unit price */}
           <div className="flex items-baseline gap-2 mt-1.5">
             <span className="text-sm font-bold text-stone-900 font-sans">
-              {formatCurrency(item.effectivePrice)}
+              {formatCurrency(item.unitPrice)}
             </span>
             {isDiscounted && (
               <span className="text-xs text-stone-400 line-through">
-                {formatCurrency(item.originalPrice)}
+                {formatCurrency(item.baseMrp)}
               </span>
             )}
           </div>
@@ -57,7 +57,7 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
         <div className="flex flex-col items-center">
           <div className="flex items-center border border-stone-200 rounded-xl bg-white shadow-soft-sm">
             <button
-              onClick={() => onUpdateQuantity(item.cartItemId, item.quantity - 1)}
+              onClick={() => onUpdateQuantity(item.variantId, item.quantity - 1)}
               className="px-3 py-1.5 text-stone-600 hover:text-stone-900"
               aria-label="Decrease quantity"
             >
@@ -67,7 +67,7 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
               {item.quantity}
             </span>
             <button
-              onClick={() => onUpdateQuantity(item.cartItemId, item.quantity + 1)}
+              onClick={() => onUpdateQuantity(item.variantId, item.quantity + 1)}
               disabled={isAtMaxStock}
               className="px-3 py-1.5 text-stone-600 hover:text-stone-900 disabled:opacity-30"
               aria-label="Increase quantity"
@@ -85,18 +85,18 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
         {/* Total for this line item */}
         <div className="text-right min-w-[80px]">
           <p className="text-sm sm:text-base font-bold text-stone-950 font-sans">
-            {formatCurrency(item.effectivePrice * item.quantity)}
+            {formatCurrency(item.subtotal)}
           </p>
           {isDiscounted && (
             <p className="text-[11px] text-emerald-700 font-medium">
-              Save {formatCurrency((item.originalPrice - item.effectivePrice) * item.quantity)}
+              Save {formatCurrency((item.baseMrp - item.unitPrice) * item.quantity)}
             </p>
           )}
         </div>
 
         {/* Delete item */}
         <button
-          onClick={() => onRemove(item.cartItemId)}
+          onClick={() => onRemove(item.variantId)}
           className="p-2 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-stone-100 transition-colors"
           aria-label="Remove item from bag"
         >

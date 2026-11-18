@@ -10,6 +10,7 @@ export default function ProductGrid({
   emptyDescription = 'Try adjusting your search criteria or removing active filters.',
   className = '',
 }) {
+console.log(products);
   if (!products || products.length === 0) {
     return (
       <EmptyState

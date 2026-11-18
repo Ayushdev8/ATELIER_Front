@@ -3,7 +3,7 @@
 // FUTURE BACKEND INTEGRATION:
 // Replace this dummy product filtering and sorting logic with server-side query parameters and your search API.
 
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
 import ProductGrid from '@/components/products/ProductGrid';
@@ -13,11 +13,12 @@ import SearchInput from '@/components/products/SearchInput';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { calculateDiscountedPrice } from '@/utils/calculateDiscount';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import ProductGridSkeleton from '@/components/products/ProductGridSkeleton';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
-  const { products } = useStore();
+  const { products, loading, pagination, getProduct } = useStore();
 
   const initialSearch = searchParams.get('search') || '';
   const initialCategory = searchParams.get('category') || '';
@@ -32,7 +33,8 @@ function ProductsContent() {
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState(initialSort);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
 
   // Filter products locally
   const filteredProducts = useMemo(() => {
@@ -104,8 +106,45 @@ function ProductsContent() {
     }
   }, [filteredProducts, sortBy]);
 
-  const displayedProducts = sortedProducts.slice(0, visibleCount);
-  const hasMore = visibleCount < sortedProducts.length;
+  const isServerPaginated = Boolean(pagination?.totalPages && pagination.totalPages > 1);
+
+  const totalPages = isServerPaginated
+    ? pagination.totalPages
+    : Math.max(1, Math.ceil(sortedProducts.length / ITEMS_PER_PAGE));
+
+  const totalProductCount = isServerPaginated
+    ? (pagination?.totalElements ?? sortedProducts.length)
+    : sortedProducts.length;
+
+  const displayedProducts = useMemo(() => {
+    if (isServerPaginated) {
+      return sortedProducts;
+    }
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [isServerPaginated, sortedProducts, currentPage, ITEMS_PER_PAGE]);
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
+    setCurrentPage(newPage);
+    if (isServerPaginated && typeof getProduct === 'function') {
+      // Spring Boot pagination is typically 0-indexed: page 1 corresponds to index 0
+      getProduct(newPage - 1, ITEMS_PER_PAGE);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setCurrentPage(1);
+    if (isServerPaginated && typeof getProduct === 'function') {
+      getProduct(0, ITEMS_PER_PAGE);
+    }
+  }, [search, selectedCategory, priceRange, minRating, saleOnly, inStockOnly, sortBy]);
 
   const handleResetFilters = () => {
     setSearch('');
@@ -115,7 +154,10 @@ function ProductsContent() {
     setSaleOnly(false);
     setInStockOnly(false);
     setSortBy('featured');
-    setVisibleCount(12);
+    setCurrentPage(1);
+    if (isServerPaginated && typeof getProduct === 'function') {
+      getProduct(0, ITEMS_PER_PAGE);
+    }
   };
 
   const activeFilterCount =
@@ -201,7 +243,7 @@ function ProductsContent() {
           <div className="flex items-center justify-between mb-6 text-xs text-stone-500 font-medium">
             <p>
               Showing <span className="font-bold text-stone-900">{displayedProducts.length}</span> of{' '}
-              <span className="font-bold text-stone-900">{sortedProducts.length}</span> products
+              <span className="font-bold text-stone-900">{totalProductCount}</span> products
             </p>
             {activeFilterCount > 0 && (
               <button
@@ -213,23 +255,85 @@ function ProductsContent() {
             )}
           </div>
 
-          <ProductGrid
-            products={displayedProducts}
-            emptyTitle="No matching products"
-            emptyDescription="We couldn't find any products matching your active filters. Try broadening your price range or clearing selected categories."
-          />
+                {loading ? (
+                  <ProductGridSkeleton count={12} />
+                ) : (
+                  <ProductGrid
+                    products={displayedProducts}
+                    emptyTitle="No matching products"
+                    emptyDescription="We couldn't find any products matching your active filters. Try broadening your price range or clearing selected categories."
+                  />
+                )}
 
-          {/* Load More Pagination */}
-          {hasMore && (
-            <div className="mt-12 text-center">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => setVisibleCount((prev) => prev + 8)}
-                className="px-8 shadow-soft-sm"
-              >
-                Load More Pieces ({sortedProducts.length - visibleCount} remaining)
-              </Button>
+          {/* Previous and Next Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-stone-200/80 pt-6">
+              <p className="text-xs text-stone-500 font-medium">
+                Page <span className="font-bold text-stone-900">{currentPage}</span> of{' '}
+                <span className="font-bold text-stone-900">{totalPages}</span>
+              </p>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1 || loading}
+                  className="px-4 py-2 text-xs font-semibold"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </Button>
+
+                <div className="hidden sm:flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      return (
+                        page === 1 ||
+                        page === totalPages ||
+                        Math.abs(page - currentPage) <= 1
+                      );
+                    })
+                    .reduce((acc, page, index, arr) => {
+                      if (index > 0 && page - arr[index - 1] > 1) {
+                        acc.push('...');
+                      }
+                      acc.push(page);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 text-xs text-stone-400 select-none">
+                          ...
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => handlePageChange(item)}
+                          disabled={loading}
+                          className={`w-9 h-9 rounded-xl text-xs font-semibold transition-colors ${
+                            currentPage === item
+                              ? 'bg-stone-900 text-white shadow-sm'
+                              : 'text-stone-700 hover:bg-stone-100 border border-stone-200'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages || loading}
+                  className="px-4 py-2 text-xs font-semibold"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -277,7 +381,7 @@ function ProductsContent() {
                 onClick={() => setIsMobileFiltersOpen(false)}
                 className="w-full"
               >
-                Apply Filters ({sortedProducts.length} Results)
+                Apply Filters ({totalProductCount} Results)
               </Button>
             </div>
           </div>

@@ -14,9 +14,9 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { ShoppingBag, ArrowLeft, Trash2 } from 'lucide-react';
 
 export default function CartPage() {
-  const { items, isInitialized, updateQuantity, removeFromCart, clearCart } = useCart();
+  const { cartItems, updateQuantity, removeFromCart, clearCart,cartLoading } = useCart();
 
-  if (!isInitialized) {
+  if (cartLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-24">
         <LoadingSpinner size="lg" message="Loading your shopping bag..." />
@@ -24,7 +24,7 @@ export default function CartPage() {
     );
   }
 
-  if (items.length === 0) {
+  if (cartItems.totalItems === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
         <EmptyState
@@ -47,7 +47,7 @@ export default function CartPage() {
             Review Selection
           </span>
           <h1 className="font-serif text-3xl sm:text-4xl font-extrabold text-stone-950 mt-1">
-            Shopping Bag ({items.length} {items.length === 1 ? 'item' : 'items'})
+            Shopping Bag ({cartItems.totalItems} {cartItems.totalItems === 1 ? 'item' : 'items'})
           </h1>
         </div>
 
@@ -74,9 +74,9 @@ export default function CartPage() {
         {/* Left: Items List */}
         <div className="lg:col-span-7 xl:col-span-8 bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/80 shadow-soft-sm">
           <div className="divide-y divide-stone-100">
-            {items.map((item) => (
+            {cartItems.items.map((item) => (
               <CartItem
-                key={item.cartItemId}
+                key={item.id}
                 item={item}
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeFromCart}
