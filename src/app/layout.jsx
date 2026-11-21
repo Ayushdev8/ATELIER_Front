@@ -7,6 +7,7 @@ import { WishlistProvider } from '@/context/WishlistContext';
 import NotificationContainer from '@/components/ui/Notification';
 import StoreLayoutWrapper from '@/components/layout/StoreLayoutWrapper';
 import Script from "next/script";
+import NextTopLoader from 'nextjs-toploader';
 
 export const metadata = {
   title: 'ATELIER & CO. | Contemporary Luxury E-Commerce',
@@ -17,6 +18,16 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className="scroll-smooth">
       <body className="bg-[#FAF8F5] text-stone-900 min-h-screen selection:bg-brand-200 selection:text-brand-900 antialiased">
+        <NextTopLoader
+        color="#A95C40"
+        initialPosition={0.08}
+        crawlSpeed={200}
+        height={3}
+        crawl={true}
+        showSpinner={false}
+        easing="ease"
+        speed={200}
+        />
          <Script src="https://sdk.cashfree.com/js/v3/cashfree.js"  strategy="beforeInteractive"/>
         <NotificationProvider>
           <AuthProvider>

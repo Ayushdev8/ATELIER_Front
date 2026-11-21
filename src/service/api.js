@@ -40,7 +40,7 @@ api.interceptors.response.use(
                 localStorage.getItem("refresh");
 
             const response = await axios.post(
-                "http://localhost:8080/api/v2/auth/refresh",
+                `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
                 {
                     refreshToken: refreshToken
                 }
